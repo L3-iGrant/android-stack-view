@@ -297,6 +297,19 @@ class StackLayoutManager(
         }
     }
 
+    /**
+     * Resets the stack to show the 0th item as presented.
+     * Call this after adding/removing items to avoid stale selection.
+     */
+    fun refresh(recyclerView: RecyclerView) {
+        animator?.cancel()
+        snapBackAnimator?.cancel()
+        stretchDistance = 0f
+        scrollOffset = 0
+        presentedPosition = 0
+        requestLayout()
+    }
+
     private val RecyclerView.recycler: RecyclerView.Recycler
         get() {
             val field = RecyclerView::class.java.getDeclaredField("mRecycler")
