@@ -1,7 +1,10 @@
 package io.igrant.stackview
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import androidx.recyclerview.widget.RecyclerView
@@ -31,6 +34,9 @@ class StackLayoutManager(
 
     private var presentedHeight = 0
 
+    // Flag to force re-measure on next doLayout call
+    private var needsRemeasure = true
+
     override fun generateDefaultLayoutParams(): RecyclerView.LayoutParams {
         return RecyclerView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -42,6 +48,9 @@ class StackLayoutManager(
 
     override fun onAttachedToWindow(view: RecyclerView) {
         super.onAttachedToWindow(view)
+        // Disable RecyclerView's DefaultItemAnimator — it applies translationY/alpha
+        // on views during insert/move/remove which conflicts with our custom layout.
+        view.itemAnimator = null
         attachTouchListener(view)
     }
 
@@ -54,7 +63,6 @@ class StackLayoutManager(
                 when (e.action) {
                     MotionEvent.ACTION_DOWN -> {
                         isUserTouching = true
-                        // Don't cancel snap-back — let it finish
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         isUserTouching = false
@@ -68,6 +76,30 @@ class StackLayoutManager(
         })
     }
 
+    // --- Adapter change callbacks: mark that we need to re-measure ---
+
+    override fun onItemsAdded(recyclerView: RecyclerView, positionStart: Int, itemCount: Int) {
+        needsRemeasure = true
+    }
+
+    override fun onItemsRemoved(recyclerView: RecyclerView, positionStart: Int, itemCount: Int) {
+        needsRemeasure = true
+    }
+
+    override fun onItemsChanged(recyclerView: RecyclerView) {
+        needsRemeasure = true
+    }
+
+    override fun onItemsUpdated(recyclerView: RecyclerView, positionStart: Int, itemCount: Int) {
+        needsRemeasure = true
+    }
+
+    override fun onItemsMoved(recyclerView: RecyclerView, from: Int, to: Int, itemCount: Int) {
+        needsRemeasure = true
+    }
+
+    // --- Scroll ---
+
     override fun scrollVerticallyBy(
         dy: Int,
         recycler: RecyclerView.Recycler,
@@ -75,9 +107,12 @@ class StackLayoutManager(
     ): Int {
         if (itemCount == 0) return 0
         if (animator?.isRunning == true) return 0
-
-        // Block all scroll input while snap-back animation is running
         if (snapBackAnimator?.isRunning == true) return 0
+
+        // If adapter data changed, re-measure before scrolling
+        if (needsRemeasure) {
+            remeasure(recycler)
+        }
 
         if (stretchDistance > 0f) {
             if (dy < 0) {
@@ -110,19 +145,27 @@ class StackLayoutManager(
         return consumed
     }
 
+    // --- Layout ---
+
     override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
         if (itemCount == 0) {
             detachAndScrapAttachedViews(recycler)
             return
         }
-
-        presentedPosition = presentedPosition.coerceIn(0, itemCount - 1)
         if (animator?.isRunning == true) return
 
+        presentedPosition = presentedPosition.coerceIn(0, itemCount - 1)
+        remeasure(recycler)
+        doLayout(recycler)
+    }
+
+    private fun remeasure(recycler: RecyclerView.Recycler) {
+        if (itemCount == 0) return
+        presentedPosition = presentedPosition.coerceIn(0, itemCount - 1)
         presentedHeight = measureChildHeight(presentedPosition, recycler)
         computeMaxScroll()
         scrollOffset = scrollOffset.coerceIn(0, max(0, maxScrollOffset))
-        doLayout(recycler)
+        needsRemeasure = false
     }
 
     private fun computeMaxScroll() {
@@ -131,23 +174,18 @@ class StackLayoutManager(
             maxScrollOffset = 0
             return
         }
-        // Total content: presented card + margin + (n-1) peeks + last card full height
-        // Last card should be fully visible when scrolled to the bottom
-        val lastCardHeight = presentedHeight // approximate with same height
+        val lastCardHeight = presentedHeight
         val totalContentHeight = presentedHeight + config.stackTopMargin +
                 (stackCount - 1) * config.collapsedPeekHeight + lastCardHeight
         maxScrollOffset = max(0, totalContentHeight - height)
     }
 
     /**
-     * Core layout. Everything scrolls together by scrollOffset.
-     * Presented card at top, stack cards below with peekHeight spacing.
-     * Stretch fans out stack cards when pulling down at top.
+     * Core layout. Presented card at top, stack cards below with peekHeight spacing.
      */
     private fun doLayout(recycler: RecyclerView.Recycler) {
         detachAndScrapAttachedViews(recycler)
 
-        // Presented card scrolls with content
         val presentedTop = -scrollOffset
         val stackTop = presentedTop + presentedHeight + config.stackTopMargin
 
@@ -168,16 +206,15 @@ class StackLayoutManager(
             stackIdx++
         }
 
-        // Sort by z so lower cards are added first
+        // Sort by z so lower cards are added first (painter's algorithm)
         cards.sortBy { it.zOrder }
 
         for (card in cards) {
-            // Skip if fully below screen
             if (card.top > height) continue
-            // Skip if fully above screen (use presentedHeight as estimate)
             if (card.top + presentedHeight < 0) continue
 
             val view = recycler.getViewForPosition(card.adapterPos)
+            resetViewTransforms(view)
             addView(view)
             measureChildWithMargins(view, 0, 0)
 
@@ -186,9 +223,23 @@ class StackLayoutManager(
             val left = paddingLeft
 
             layoutDecoratedWithMargins(view, left, card.top, left + mw, card.top + mh)
-            view.translationZ = card.zOrder
         }
     }
+
+    /** Clear any leftover transforms so stale state from recycled views doesn't leak. */
+    private fun resetViewTransforms(view: View) {
+        view.translationX = 0f
+        view.translationY = 0f
+        view.translationZ = 0f
+        view.alpha = 1f
+        view.rotation = 0f
+        view.rotationX = 0f
+        view.rotationY = 0f
+        view.scaleX = 1f
+        view.scaleY = 1f
+    }
+
+    // --- Snap-back animation ---
 
     private fun animateSnapBack(recyclerView: RecyclerView) {
         val recycler = recyclerView.recycler
@@ -201,9 +252,16 @@ class StackLayoutManager(
                 stretchDistance = anim.animatedValue as Float
                 doLayout(recycler)
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    requestLayout()
+                }
+            })
             start()
         }
     }
+
+    // --- Measure helper ---
 
     private fun measureChildHeight(position: Int, recycler: RecyclerView.Recycler): Int {
         val view = recycler.getViewForPosition(position)
@@ -215,6 +273,8 @@ class StackLayoutManager(
         return h
     }
 
+    // --- Present card ---
+
     fun presentCard(position: Int, recyclerView: RecyclerView) {
         if (position < 0 || position >= itemCount) return
         if (position == presentedPosition) {
@@ -222,6 +282,7 @@ class StackLayoutManager(
             return
         }
 
+        recyclerView.stopScroll()
         stretchDistance = 0f
         scrollOffset = 0
         snapBackAnimator?.cancel()
@@ -239,10 +300,11 @@ class StackLayoutManager(
             idx++
         }
 
-        // Update
+        // Update to new presented card
         presentedPosition = position
         presentedHeight = measureChildHeight(presentedPosition, recycler)
         computeMaxScroll()
+        needsRemeasure = false
 
         // Capture new positions
         val newStackTop = presentedHeight + config.stackTopMargin
@@ -285,14 +347,19 @@ class StackLayoutManager(
                     if (card.top > height) continue
 
                     val view = recycler.getViewForPosition(card.adapterPos)
+                    resetViewTransforms(view)
                     addView(view)
                     measureChildWithMargins(view, 0, 0)
                     val mh = getDecoratedMeasuredHeight(view)
                     val mw = getDecoratedMeasuredWidth(view)
                     layoutDecoratedWithMargins(view, paddingLeft, card.top, paddingLeft + mw, card.top + mh)
-                    view.translationZ = card.zOrder
                 }
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    requestLayout()
+                }
+            })
             start()
         }
     }
@@ -302,11 +369,13 @@ class StackLayoutManager(
      * Call this after adding/removing items to avoid stale selection.
      */
     fun refresh(recyclerView: RecyclerView) {
+        recyclerView.stopScroll()
         animator?.cancel()
         snapBackAnimator?.cancel()
         stretchDistance = 0f
         scrollOffset = 0
         presentedPosition = 0
+        needsRemeasure = true
         requestLayout()
     }
 
