@@ -35,4 +35,6 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.activity:activity-ktx:1.8.2")
+    implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
 }

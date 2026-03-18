@@ -7,14 +7,17 @@ import androidx.recyclerview.widget.RecyclerView
 import io.igrant.stackview.sample.databinding.ItemCardBinding
 
 data class CardItem(
+    val id: String,
     val title: String,
-    val subtitle: String,
-    val location: String,
+    val genre: String,
+    val year: Int,
+    val director: String,
+    val rating: Float,
     val backgroundColor: Int
 )
 
 class CardAdapter(
-    private val items: List<CardItem>,
+    private val items: MutableList<CardItem>,
     private val onCardClicked: (Int) -> Unit
 ) : RecyclerView.Adapter<CardAdapter.CardViewHolder>() {
 
@@ -22,10 +25,10 @@ class CardAdapter(
         private val binding: ItemCardBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(item: CardItem, position: Int) {
+        fun bind(item: CardItem) {
             binding.tvTitle.text = item.title
-            binding.tvSubtitle.text = item.subtitle
-            binding.tvLocation.text = item.location
+            binding.tvSubtitle.text = "${item.genre} • ${item.year}"
+            binding.tvLocation.text = "Dir. ${item.director} — ★ ${item.rating}"
             binding.root.setCardBackgroundColor(item.backgroundColor)
 
             val isLight = isColorLight(item.backgroundColor)
@@ -35,7 +38,10 @@ class CardAdapter(
             binding.tvLocation.setTextColor(textColor)
 
             binding.root.setOnClickListener {
-                onCardClicked(position)
+                val pos = bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    onCardClicked(pos)
+                }
             }
         }
 
@@ -56,8 +62,25 @@ class CardAdapter(
     }
 
     override fun onBindViewHolder(holder: CardViewHolder, position: Int) {
-        holder.bind(items[position], position)
+        holder.bind(items[position])
     }
 
     override fun getItemCount(): Int = items.size
+
+    fun addItem(item: CardItem) {
+        items.add(0, item)
+        notifyItemInserted(0)
+    }
+
+    fun removeItem(position: Int) {
+        items.removeAt(position)
+        notifyItemRemoved(position)
+        notifyItemRangeChanged(position, items.size)
+    }
+
+    fun updateItems(newItems: List<CardItem>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
+    }
 }
