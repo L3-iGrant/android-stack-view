@@ -139,6 +139,3 @@ stack-view/
 - Kotlin
 - AndroidX RecyclerView
 
-## License
-
-Copyright (c) 2026 iGrant.io
