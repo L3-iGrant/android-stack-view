@@ -1,4 +1,4 @@
-# StackView
+# Android Stack View SDKs
 
 A custom `RecyclerView.LayoutManager` for Android that displays cards in a stacked, wallet-style layout.
 
@@ -139,6 +139,3 @@ stack-view/
 - Kotlin
 - AndroidX RecyclerView
 
-## License
-
-Copyright (c) 2026 iGrant.io
