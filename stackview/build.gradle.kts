@@ -39,7 +39,7 @@ afterEvaluate {
                 pom {
                     name.set("StackView")
                     description.set("A custom RecyclerView.LayoutManager for wallet-style stacked cards")
-                    url.set("https://github.com/L3-iGrant/stack-view")
+                    url.set("https://github.com/L3-iGrant/android-stack-view")
 
                     licenses {
                         license {
@@ -54,7 +54,7 @@ afterEvaluate {
         repositories {
             maven {
                 name = "GitHubPackages"
-                url = uri("https://maven.pkg.github.com/L3-iGrant/stack-view")
+                url = uri("https://maven.pkg.github.com/L3-iGrant/android-stack-view")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user") as String? ?: ""
                     password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.token") as String? ?: ""
