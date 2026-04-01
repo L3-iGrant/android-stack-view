@@ -185,6 +185,8 @@ class StackLayoutManager(
      */
     private fun doLayout(recycler: RecyclerView.Recycler) {
         detachAndScrapAttachedViews(recycler)
+        if (itemCount == 0) return
+        presentedPosition = presentedPosition.coerceIn(0, itemCount - 1)
 
         val presentedTop = -scrollOffset
         val stackTop = presentedTop + presentedHeight + config.stackTopMargin
@@ -209,7 +211,9 @@ class StackLayoutManager(
         // Sort by z so lower cards are added first (painter's algorithm)
         cards.sortBy { it.zOrder }
 
+        val currentItemCount = itemCount
         for (card in cards) {
+            if (card.adapterPos < 0 || card.adapterPos >= currentItemCount) continue
             if (card.top > height) continue
             if (card.top + presentedHeight < 0) continue
 
@@ -325,11 +329,14 @@ class StackLayoutManager(
                 val progress = anim.animatedValue as Float
                 detachAndScrapAttachedViews(recycler)
 
+                if (itemCount == 0) return@addUpdateListener
+
                 data class AnimCard(val adapterPos: Int, val top: Int, val zOrder: Float)
                 val cards = mutableListOf<AnimCard>()
 
+                val animItemCount = min(itemCount, oldCards.size)
                 var sIdx = 0
-                for (i in 0 until itemCount) {
+                for (i in 0 until animItemCount) {
                     val fromY = oldCards[i]
                     val toY = newCards[i]
                     val y = (fromY + (toY - fromY) * progress).toInt()
@@ -343,7 +350,9 @@ class StackLayoutManager(
 
                 cards.sortBy { it.zOrder }
 
+                val currentCount = itemCount
                 for (card in cards) {
+                    if (card.adapterPos < 0 || card.adapterPos >= currentCount) continue
                     if (card.top > height) continue
 
                     val view = recycler.getViewForPosition(card.adapterPos)
