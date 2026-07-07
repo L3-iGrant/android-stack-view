@@ -1,7 +1,11 @@
 package io.igrant.stackview
 
 /**
- * Configuration for the StackLayoutManager.
+ * Configuration for the StackView SDK.
+ *
+ * Shared by both implementations — the View [StackLayoutManager] and the Compose
+ * `StackView` composable — so behavior stays identical across the two. All distances
+ * are expressed in **pixels**.
  *
  * @param collapsedPeekHeight The visible strip height (in pixels) for each collapsed card.
  *                            Maps to iOS `minimalDistanceBetweenCollapsedCardViews`.
