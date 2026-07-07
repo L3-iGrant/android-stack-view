@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.igrant.stackview"
+    namespace = "io.igrant.stackview.core"
     compileSdk = 34
 
     defaultConfig {
@@ -22,12 +22,6 @@ android {
     }
 }
 
-dependencies {
-    // Re-export StackConfig so existing `io.igrant:stackview` consumers get it transitively.
-    api(project(":stackview-core"))
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-}
-
 afterEvaluate {
     publishing {
         publications {
@@ -35,12 +29,12 @@ afterEvaluate {
                 from(components["release"])
 
                 groupId = "io.igrant"
-                artifactId = "stackview"
+                artifactId = "stackview-core"
                 version = findProperty("VERSION_NAME") as String? ?: "1.0.0"
 
                 pom {
-                    name.set("StackView")
-                    description.set("A custom RecyclerView.LayoutManager for wallet-style stacked cards")
+                    name.set("StackView Core")
+                    description.set("Shared configuration for the StackView wallet-stack SDK (View + Compose)")
                     url.set("https://github.com/L3-iGrant/android-stack-view")
 
                     licenses {

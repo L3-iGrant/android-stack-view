@@ -1,12 +1,15 @@
 name: Publish to GitHub Packages
 
+# Lockstep release: all three artifacts share one version and are published together.
+# Create a GitHub Release with tag `v<version>` (e.g. v1.2.0) to publish:
+#   io.igrant:stackview-core, io.igrant:stackview, io.igrant:stackview-compose  (all at <version>)
 on:
   release:
     types: [published]
 
 jobs:
   publish:
-    name: Publish Library
+    name: Publish Libraries
     runs-on: ubuntu-latest
 
     permissions:
@@ -29,12 +32,17 @@ jobs:
       - name: Extract version from tag
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          VERSION=$(echo "$TAG" | sed -E 's/^v//')
-          echo "VERSION_NAME=$VERSION" >> $GITHUB_ENV
-          echo "Publishing version: $VERSION"
+          VERSION="${TAG#v}"
+          echo "VERSION_NAME=$VERSION" >> "$GITHUB_ENV"
+          echo "Publishing all artifacts at version: $VERSION"
 
       - name: Publish to GitHub Packages
-        run: ./gradlew :stackview:publishReleasePublicationToGitHubPackagesRepository -PVERSION_NAME=${{ env.VERSION_NAME }}
+        run: |
+          ./gradlew \
+            :stackview-core:publishReleasePublicationToGitHubPackagesRepository \
+            :stackview:publishReleasePublicationToGitHubPackagesRepository \
+            :stackview-compose:publishReleasePublicationToGitHubPackagesRepository \
+            -PVERSION_NAME=${{ env.VERSION_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}

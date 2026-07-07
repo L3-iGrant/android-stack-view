@@ -1,11 +1,12 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("maven-publish")
 }
 
 android {
-    namespace = "io.igrant.stackview"
+    namespace = "io.igrant.stackview.compose"
     compileSdk = 34
 
     defaultConfig {
@@ -20,12 +21,24 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
-    // Re-export StackConfig so existing `io.igrant:stackview` consumers get it transitively.
+    // Re-export StackConfig so consumers of `io.igrant:stackview-compose` get it transitively.
     api(project(":stackview-core"))
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
+
+    val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
+    api(composeBom)
+    api("androidx.compose.foundation:foundation")
+    api("androidx.compose.ui:ui")
+    implementation("androidx.compose.animation:animation")
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.ui:ui-tooling-preview")
 }
 
 afterEvaluate {
@@ -35,12 +48,12 @@ afterEvaluate {
                 from(components["release"])
 
                 groupId = "io.igrant"
-                artifactId = "stackview"
+                artifactId = "stackview-compose"
                 version = findProperty("VERSION_NAME") as String? ?: "1.0.0"
 
                 pom {
-                    name.set("StackView")
-                    description.set("A custom RecyclerView.LayoutManager for wallet-style stacked cards")
+                    name.set("StackView Compose")
+                    description.set("A Jetpack Compose implementation of the wallet-style stacked card view")
                     url.set("https://github.com/L3-iGrant/android-stack-view")
 
                     licenses {

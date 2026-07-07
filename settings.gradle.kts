@@ -15,5 +15,8 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "stack-view"
+include(":stackview-core")
 include(":stackview")
+include(":stackview-compose")
 include(":sample")
+include(":sample-compose")
