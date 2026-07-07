@@ -1,6 +1,13 @@
 # Android Stack View SDKs
 
-A custom `RecyclerView.LayoutManager` for Android that displays cards in a stacked, wallet-style layout.
+Displays cards in a stacked, wallet-style layout, shipped as **two implementations** that
+share the same behavior and configuration:
+
+- **`stackview`** — a custom `RecyclerView.LayoutManager` for the classic View toolkit.
+- **`stackview-compose`** — a `StackView` composable for Jetpack Compose.
+
+Both consume a single `StackConfig` from **`stackview-core`**, so the look and feel stay
+identical no matter which UI toolkit you use.
 
 One card is **presented** (fully visible at the top), while the remaining cards are **collapsed** in a stack below, showing only a peek strip of each card. Tapping a collapsed card promotes it to the top with a smooth animation.
 
@@ -13,7 +20,14 @@ One card is **presented** (fully visible at the top), while the remaining cards 
 - **Presented card callback** — get notified when the already-presented card is tapped
 - **Refresh support** — reset the stack to the first card after adding or removing items
 - **Configurable** — peek height, animation duration, stretch resistance, and more
-- **Standard RecyclerView** — works with any `RecyclerView.Adapter`
+- **Two UI toolkits** — a `StackView` composable for Compose, or a `RecyclerView.LayoutManager` that works with any `RecyclerView.Adapter` — both driven by the same shared `StackConfig`
+
+## Documentation
+
+- **[Implementation Guide](docs/IMPLEMENTATION_GUIDE.md)** — full integration walkthrough for
+  Compose and View, including GitHub Packages auth, config, and gotchas.
+- **[Building & Releasing](docs/BUILDING_AND_RELEASING.md)** — build the modules, run the
+  samples, and publish the SDKs.
 
 ## Installation
 
@@ -26,20 +40,59 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven {
-            url = uri("https://maven.pkg.github.com/L3-iGrant/stack-view")
+            url = uri("https://maven.pkg.github.com/L3-iGrant/android-stack-view")
         }
     }
 }
 ```
 
-**app/build.gradle.kts**:
+**app/build.gradle.kts** — pick the implementation for your UI toolkit (each pulls in
+`stackview-core` transitively):
 ```kotlin
 dependencies {
+    // Classic View / RecyclerView
     implementation("io.igrant:stackview:<latest-version>")
+
+    // Jetpack Compose
+    implementation("io.igrant:stackview-compose:<latest-version>")
 }
 ```
 
-## Usage
+## Usage (Jetpack Compose)
+
+```kotlin
+val state = rememberStackViewState()
+val density = LocalDensity.current
+val config = remember(density) {
+    with(density) {
+        StackConfig(
+            collapsedPeekHeight = 48.dp.roundToPx(),
+            stackTopMargin = 12.dp.roundToPx(),
+            animationDuration = 350L,
+        )
+    }
+}
+
+StackView(
+    items = movies,
+    modifier = Modifier.fillMaxSize(),
+    state = state,
+    config = config,
+    onPresentedCardClick = { index -> /* open detail for movies[index] */ },
+) { index, movie ->
+    MovieCard(movie)   // your own card composable
+}
+```
+
+- Tap a stacked card → it animates to the top.
+- Tap the presented card → `onPresentedCardClick` fires.
+- Pull down at the top → the stack fans out (rubber-band), snaps back on release.
+- After adding/removing items, call `state.refresh()` to reset to the first card.
+
+`StackConfig` values are in **pixels** (shared with the View SDK); convert from `dp` with
+`LocalDensity` as shown above. See `sample-compose/` for a full demo.
+
+## Usage (View / RecyclerView)
 
 ### 1. Set up the LayoutManager
 
@@ -106,9 +159,43 @@ This cancels any running animations, resets scroll position, and presents the 0t
 | `maxStretchDistance` | `800` | Maximum stretch distance (px). Caps the fan-out |
 | `snapBackDuration` | `600` | Duration (ms) for the snap-back animation on release |
 
+`StackConfig` lives in `stackview-core` and is shared by both SDKs. Its values are in
+**pixels** — in Compose, convert from `dp` with `LocalDensity` (see the Compose usage above).
+
 ## API
 
-### StackLayoutManager
+### Compose — `StackView`
+
+```kotlin
+@Composable
+fun <T> StackView(
+    items: List<T>,
+    modifier: Modifier = Modifier,
+    state: StackViewState = rememberStackViewState(),
+    config: StackConfig = StackConfig(),
+    onPresentedCardClick: (index: Int) -> Unit = {},
+    cardContent: @Composable (index: Int, item: T) -> Unit,
+)
+```
+
+| Parameter | Description |
+|---|---|
+| `items` | Backing data; one card is composed per item via `cardContent` |
+| `state` | Hoisted `StackViewState`; defaults to a remembered instance |
+| `config` | Layout/animation tuning (see [Configuration](#configuration)) |
+| `onPresentedCardClick` | Invoked when the already-presented card is tapped again |
+| `cardContent` | Renders a single card given its index and item |
+
+**`StackViewState`** — created via `rememberStackViewState(initialPresentedIndex = 0)`; the
+presented index survives configuration changes and process death.
+
+| Property / Method | Description |
+|---|---|
+| `presentedIndex: Int` | Index of the currently presented card (read-only) |
+| `present(index)` | Present a card at the given index with animation |
+| `refresh()` | Reset state and present the 0th card. Call after adding/removing items |
+
+### View — `StackLayoutManager`
 
 | Property / Method | Description |
 |---|---|
@@ -121,21 +208,35 @@ This cancels any running animations, resets scroll position, and presents the 0t
 
 ```
 stack-view/
-├── stackview/          # Library module
+├── stackview-core/         # Shared config — StackConfig (no View/Compose deps)
+├── stackview/              # View SDK — RecyclerView.LayoutManager
 │   └── src/main/java/io/igrant/stackview/
-│       ├── StackLayoutManager.kt
-│       └── StackConfig.kt
-└── sample/             # Sample app (movie collection demo)
-    └── src/main/java/io/igrant/stackview/sample/
-        ├── MainActivity.kt         # Stack view with FAB to add movies
-        ├── CardAdapter.kt          # Adapter with dynamic add/remove
-        ├── MovieDetailActivity.kt  # Detail page with remove action
-        └── MoviePreferences.kt     # SharedPreferences persistence
+│       └── StackLayoutManager.kt
+├── stackview-compose/      # Compose SDK
+│   └── src/main/java/io/igrant/stackview/compose/
+│       ├── StackView.kt        # StackView composable (custom Layout)
+│       └── StackViewState.kt   # rememberStackViewState hoisted state
+├── sample/                 # View sample (movie collection demo)
+└── sample-compose/         # Compose sample (movie collection demo)
 ```
+
+## Releasing
+
+The three artifacts share **one version** (lockstep) and are published together. To cut a
+release, create a GitHub Release with tag `v<version>`:
+
+| Tag | Publishes |
+|---|---|
+| `v1.2.0` | `io.igrant:stackview-core`, `io.igrant:stackview`, `io.igrant:stackview-compose` — all at `1.2.0` |
+
+The `publish` workflow reads the version from the tag and publishes all three modules at that
+version. See **[Building & Releasing](docs/BUILDING_AND_RELEASING.md)** for building, manual
+publishing, and POM verification.
 
 ## Requirements
 
 - Min SDK: 24
 - Kotlin
-- AndroidX RecyclerView
+- AndroidX RecyclerView (for `stackview`)
+- Jetpack Compose (for `stackview-compose`)
 
