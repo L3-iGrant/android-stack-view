@@ -124,15 +124,8 @@ fun <T> StackView(
         val placeables = measurables.map { it.measure(childConstraints) }
         val cardHeight = placeables.maxOf { it.height }
 
-        // maxScroll — mirrors StackLayoutManager.computeMaxScroll().
-        val stackCount = count - 1
-        state.maxScrollOffset = if (stackCount <= 0) {
-            0
-        } else {
-            val totalContentHeight = cardHeight + config.stackTopMargin +
-                (stackCount - 1) * config.collapsedPeekHeight + cardHeight
-            (totalContentHeight - viewportHeight).coerceAtLeast(0)
-        }
+        // maxScroll — all stacking math lives in StackGeometry (unit-tested).
+        state.maxScrollOffset = StackGeometry.maxScrollOffset(count, cardHeight, viewportHeight, config)
         // scrollOffset is re-clamped against maxScrollOffset in StackViewState.onDrag, so
         // there's no need to write observable state here (which would force a relayout).
         val clampedScroll = state.scrollOffset.coerceIn(0f, state.maxScrollOffset.toFloat())
@@ -143,34 +136,21 @@ fun <T> StackView(
         val scroll = clampedScroll
         val stretch = state.stretch
 
-        // Painter's algorithm: draw back-to-front by z (presented on top), matching the
-        // `cards.sortBy { it.zOrder }` loop in doLayout.
-        val drawOrder = (0 until count).sortedBy { i -> zRank(i, p1, count) }
+        // Painter's algorithm: draw back-to-front by z (presented on top).
+        val drawOrder = (0 until count).sortedBy { i -> StackGeometry.zOrder(i, p1, count) }
 
         layout(width, viewportHeight) {
             for (i in drawOrder) {
-                val from = slotY(i, p0, cardHeight, config)
-                val to = slotY(i, p1, cardHeight, config)
+                // Interpolate between the previous and current arrangement for the present
+                // animation, then apply scroll and (stack cards only) the pull-down stretch.
+                val from = StackGeometry.slotTop(i, p0, cardHeight, config)
+                val to = StackGeometry.slotTop(i, p1, cardHeight, config)
                 var y = (from + (to - from) * t) - scroll
                 if (i != p1) {
-                    y += stretch * stackRank(i, p1)
+                    y += stretch * StackGeometry.stackRank(i, p1)
                 }
                 placeables[i].placeRelative(0, y.roundToInt())
             }
         }
     }
 }
-
-/** Number of non-presented cards that sit before [i] in the stack. */
-private fun stackRank(i: Int, presented: Int): Int = if (i < presented) i else i - 1
-
-/** Target top of card [i] for a given [presented] card, before scroll/stretch, in px. */
-private fun slotY(i: Int, presented: Int, cardHeight: Int, config: StackConfig): Float {
-    if (i == presented) return 0f
-    val rank = stackRank(i, presented)
-    return (cardHeight + config.stackTopMargin + rank * config.collapsedPeekHeight).toFloat()
-}
-
-/** Paint order key: presented card on top, stack cards ordered by their rank. */
-private fun zRank(i: Int, presented: Int, count: Int): Int =
-    if (i == presented) count + 1 else stackRank(i, presented)

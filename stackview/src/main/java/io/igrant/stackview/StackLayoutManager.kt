@@ -12,13 +12,31 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * A [RecyclerView.LayoutManager] that arranges cards in a wallet-style stack.
+ *
+ * One card is **presented** at the top; the rest collapse into a stack below, each showing
+ * only a [StackConfig.collapsedPeekHeight] peek strip. Tapping a stacked card promotes it to
+ * the top with an animation (call [presentCard] from your adapter's click handler); pulling
+ * down at the top fans the stack out with a rubber-band stretch that snaps back on release;
+ * the stack scrolls when it overflows the viewport.
+ *
+ * This is the View counterpart of the Compose `StackView` and shares the same [StackConfig]
+ * (from `io.igrant:stackview-core`), so behavior matches across the two.
+ *
+ * Works with any [RecyclerView.Adapter]. On attach it disables the RecyclerView's default
+ * `ItemAnimator`, which would otherwise fight the custom card animation.
+ *
+ * @param config layout/animation tuning. Distances are in **pixels** (see [StackConfig]).
+ */
 class StackLayoutManager(
     private val config: StackConfig = StackConfig()
 ) : RecyclerView.LayoutManager() {
 
-    /** Callback when the already-presented card is tapped again. */
+    /** Invoked when the already-presented (top) card is tapped again, with its position. */
     var onPresentedCardClicked: ((position: Int) -> Unit)? = null
 
+    /** Adapter position of the currently presented (top) card. Read-only. */
     var presentedPosition: Int = 0
         private set
 
@@ -279,6 +297,13 @@ class StackLayoutManager(
 
     // --- Present card ---
 
+    /**
+     * Present the card at [position] with the reflow animation. If it is already presented,
+     * [onPresentedCardClicked] is invoked instead. Out-of-range positions are ignored.
+     *
+     * @param position adapter position of the card to present.
+     * @param recyclerView the RecyclerView this layout manager is attached to.
+     */
     fun presentCard(position: Int, recyclerView: RecyclerView) {
         if (position < 0 || position >= itemCount) return
         if (position == presentedPosition) {
