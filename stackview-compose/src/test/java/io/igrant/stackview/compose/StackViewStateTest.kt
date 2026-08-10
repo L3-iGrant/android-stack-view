@@ -1,6 +1,8 @@
 package io.igrant.stackview.compose
 
+import androidx.compose.animation.core.exponentialDecay
 import io.igrant.stackview.StackConfig
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -89,6 +91,74 @@ class StackViewStateTest {
         assertEquals(0f, s.stretch, 0.001f)
         s.onDrag(-100f, config)  // now at top → stretch 50
         assertEquals(50f, s.stretch, 0.001f)
+    }
+
+    // --- onDrag: crossing the stretch/scroll boundary within one delta ---
+    // These are the direction-change cases: a delta big enough to use up the stretch (or the
+    // remaining scroll) must spend its remainder on the other side instead of dropping it.
+
+    @Test
+    fun onDrag_unwindingStretchCompletely_carriesLeftoverIntoScroll() {
+        val s = state()
+        s.maxScrollOffset = 500
+        s.onDrag(-200f, config) // stretch 100
+
+        // 200px of finger unwinds the stretch exactly; the remaining 100 should scroll.
+        s.onDrag(300f, config)
+        assertEquals(0f, s.stretch, 0.001f)
+        assertEquals(100f, s.scrollOffset, 0.001f)
+    }
+
+    @Test
+    fun onDrag_scrollingPastTheTop_carriesLeftoverIntoStretch() {
+        val s = state()
+        s.maxScrollOffset = 500
+        s.onDrag(300f, config) // scrollOffset 300
+
+        // 300 of the pull returns to the top, the other 200 becomes stretch (200 * 0.5).
+        s.onDrag(-500f, config)
+        assertEquals(0f, s.scrollOffset, 0.001f)
+        assertEquals(100f, s.stretch, 0.001f)
+    }
+
+    @Test
+    fun onDrag_crossingTheBoundary_consumesTheWholeDelta() {
+        val s = state()
+        s.maxScrollOffset = 500
+        s.onDrag(300f, config)
+        // Nothing is dropped on the way past the top, so the finger stays in sync.
+        assertEquals(-500f, s.onDrag(-500f, config), 0.001f)
+    }
+
+    @Test
+    fun onDrag_zeroResistance_neverStretchesAndStillScrolls() {
+        val s = state()
+        val rigid = StackConfig(stretchResistance = 0f)
+        s.maxScrollOffset = 500
+        s.onDrag(-100f, rigid)
+        assertEquals(0f, s.stretch, 0.001f)
+        s.onDrag(200f, rigid)
+        assertEquals(200f, s.scrollOffset, 0.001f)
+    }
+
+    // --- fling ---
+    // The decaying part needs a frame clock, so it belongs in an instrumented test. What is
+    // worth pinning here are the two cases that must not start an animation at all.
+
+    @Test
+    fun fling_belowMinimumVelocity_isIgnored() = runBlocking {
+        val s = state()
+        s.maxScrollOffset = 500
+        s.fling(initialVelocity = 10f, decay = exponentialDecay(), config = config)
+        assertEquals(0f, s.scrollOffset, 0.001f)
+    }
+
+    @Test
+    fun fling_whenNothingCanScroll_isIgnored() = runBlocking {
+        val s = state()
+        s.maxScrollOffset = 0 // stack fits the viewport
+        s.fling(initialVelocity = 5000f, decay = exponentialDecay(), config = config)
+        assertEquals(0f, s.scrollOffset, 0.001f)
     }
 
     // --- present / refresh ---
