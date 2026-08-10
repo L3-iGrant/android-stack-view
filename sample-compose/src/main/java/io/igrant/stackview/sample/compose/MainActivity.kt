@@ -225,7 +225,7 @@ private fun randomMovie(title: String): Movie {
     )
 }
 
-private fun defaultMovies(): List<Movie> = listOf(
+private val namedMovies = listOf(
     Movie("1", "Inception", "Sci-Fi", 2010, "Christopher Nolan", 8.8f, Color(0xFF6C5CE7)),
     Movie("2", "The Shawshank Redemption", "Drama", 1994, "Frank Darabont", 9.3f, Color(0xFFE17055)),
     Movie("3", "The Dark Knight", "Action", 2008, "Christopher Nolan", 9.0f, Color(0xFF2C3E50)),
@@ -237,3 +237,36 @@ private fun defaultMovies(): List<Movie> = listOf(
     Movie("9", "Parasite", "Thriller", 2019, "Bong Joon-ho", 8.5f, Color(0xFFF39C12)),
     Movie("10", "Whiplash", "Drama", 2014, "Damien Chazelle", 8.5f, Color(0xFF2D3436)),
 )
+
+/**
+ * How many filler cards to seed behind the named films.
+ *
+ * The stack is deliberately deeper than the handful of cards it takes to *look* right.
+ * StackView's per-frame cost is supposed to track how many cards are visible, not how many
+ * the list holds, and a ten-card sample never exercises that — a regression there stays
+ * invisible until it reaches a real wallet. Keep this well above a screenful.
+ */
+private const val FILLER_CARD_COUNT = 50
+
+private val fillerGenres = listOf("Sci-Fi", "Drama", "Action", "Crime", "Thriller", "Comedy", "Western")
+
+private val fillerDirectors = listOf(
+    "Agnès Varda", "Akira Kurosawa", "Greta Gerwig", "Hayao Miyazaki",
+    "Kelly Reichardt", "Lynne Ramsay", "Wong Kar-wai",
+)
+
+/**
+ * Named films first, then filler generated deterministically — no `Math.random`, so two runs
+ * seed an identical stack and scroll performance can be compared across builds.
+ */
+private fun defaultMovies(): List<Movie> = namedMovies + List(FILLER_CARD_COUNT) { i ->
+    Movie(
+        id = (namedMovies.size + 1 + i).toString(),
+        title = "Feature No. ${i + 1}",
+        genre = fillerGenres[i % fillerGenres.size],
+        year = 1970 + (i * 7) % 55,
+        director = fillerDirectors[i % fillerDirectors.size],
+        rating = 5f + (i % 50) / 10f,
+        color = palette[i % palette.size],
+    )
+}
