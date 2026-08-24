@@ -240,3 +240,12 @@ publishing, and POM verification.
 - AndroidX RecyclerView (for `stackview`)
 - Jetpack Compose (for `stackview-compose`)
 
+## Contributing
+
+This project is maintained by [iGrant.io](https://igrant.io). For contributions, please open an issue or submit a pull request.
+
+## License
+
+Copyright (c) 2026 iGrant Technologies AB (iGrant.io), Sweden
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. See [LICENSE](LICENSE) for the full text.
